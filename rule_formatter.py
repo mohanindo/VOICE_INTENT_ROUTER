@@ -10,15 +10,14 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Dict, List
 
+from vector_store import store_records_in_faiss
+from vector_search import search_faiss
+from faiss_index import rebuild_faiss_store
+
 from rule_model import Rule
 from logger import get_logger
-from settings import (
-    generate_embeddings,
-    add_records_to_faiss,
-    search_faiss,
-    rebuild_faiss_store,
-)
 
+from rule_matcher import match_rule
 logger = get_logger(__name__)
 
 VectorRecord = Dict[str, Any]
@@ -165,11 +164,7 @@ def ingest_rules_to_faiss(rules: List[Rule]) -> int:
         logger.warning("No vector records found for ingestion")
         return 0
 
-    texts = [record["text"] for record in records]
-    embeddings = generate_embeddings(texts)
-
-    stored_count = add_records_to_faiss(records, embeddings)
-
+    stored_count = store_records_in_faiss(records)
     logger.info("Stored %d rule records in FAISS", stored_count)
     return stored_count
 
@@ -223,16 +218,16 @@ if __name__ == "__main__":
             "intent_examples": [
                 "wrong bill",
                 "charged extra",
-                "billing amount incorrect",
+                "billing amount incorrect"
             ],
             "bot_questions": [
-                "May I have your bill number?",
+                "May I have your bill number?"
             ],
             "severity": "Medium",
             "workflow": "complaint_registration",
             "escalation": "Business Manager",
             "resolution": "Billing will be reviewed by the store team",
-            "metadata": {},
+            "metadata": {}
         },
         {
             "agent_id": "easybuy_support",
@@ -243,33 +238,34 @@ if __name__ == "__main__":
             "intent_examples": [
                 "staff shouted",
                 "employee rude",
-                "cashier misbehaved",
+                "cashier misbehaved"
             ],
             "bot_questions": [
-                "Which store did this happen in?",
+                "Which store did this happen in?"
             ],
             "severity": "Medium",
             "workflow": "complaint_registration",
             "escalation": "Cluster Manager",
             "resolution": "Complaint will be forwarded to store management",
-            "metadata": {},
-        },
+            "metadata": {}
+        }
     ]
 
-    try:
-        rules = [Rule(**item) for item in raw_data]
+    rules = [Rule(**item) for item in raw_data]
 
-        stored_count = rebuild_rules_in_faiss(rules)
-        print(f"Stored records in FAISS: {stored_count}")
+    stored_count = rebuild_rules_in_faiss(rules)
+    print(f"Stored records in FAISS: {stored_count}")
+#-----------------------------------------------------------------
+    result = search_rules_in_faiss(
+        query_text="employee rude.",
+        agent_id="easybuy_support",
+        top_k=3,
+    )
 
-        result = search_rules_in_faiss(
-            query_text="charged extra on my bill",
-            agent_id="easybuy_support",
-            top_k=3,
-        )
+    decision = match_rule(result)
 
-        pprint(result)
-
-    except Exception as exc:
-        logger.exception("Failed during local rule embedding demo: %s", exc)
-        raise
+    if decision:
+        print("\nMATCHED RULE:")
+        print(decision)
+    else:
+        print("No rule matched")
